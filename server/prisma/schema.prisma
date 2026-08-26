@@ -1,0 +1,193 @@
+// Prisma Schema for HR Management System
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// Enums
+// ============================================================
+
+enum Role {
+  ADMIN
+  HR
+  MANAGER
+  EMPLOYEE
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+  TERMINATED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+  ON_LEAVE
+  WEEKEND
+  HOLIDAY
+}
+
+enum LeaveType {
+  CASUAL
+  SICK
+  EARNED
+  UNPAID
+  MATERNITY
+  PATERNITY
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+// ============================================================
+// Models
+// ============================================================
+
+model User {
+  id         String   @id @default(cuid())
+  email      String   @unique
+  password   String
+  role       Role     @default(EMPLOYEE)
+  isActive   Boolean  @default(true)
+  employeeId String?  @unique
+  employee   Employee? @relation(fields: [employeeId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("users")
+}
+
+model Employee {
+  id            String         @id @default(cuid())
+  employeeCode  String         @unique
+  firstName     String
+  lastName      String
+  email         String         @unique
+  phone         String?
+  dateOfBirth   DateTime?
+  gender        Gender?
+  address       String?
+  city          String?
+  state         String?
+  zipCode       String?
+  country       String?        @default("India")
+  joiningDate   DateTime
+  designation   String
+  salary        Float?
+  status        EmployeeStatus @default(ACTIVE)
+  profilePhoto  String?
+
+  // Relations
+  departmentId  String?
+  department    Department?    @relation("DepartmentEmployees", fields: [departmentId], references: [id])
+
+  managerId     String?
+  manager       Employee?      @relation("ManagerSubordinates", fields: [managerId], references: [id])
+  subordinates  Employee[]     @relation("ManagerSubordinates")
+
+  user          User?
+  attendance    Attendance[]
+  leaveRequests Leave[]        @relation("EmployeeLeaves")
+  approvedLeaves Leave[]       @relation("ApproverLeaves")
+  leaveBalances LeaveBalance[]
+
+  headOfDepartment Department? @relation("DepartmentHead")
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@map("employees")
+}
+
+model Department {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  description String?
+  
+  headId      String?    @unique
+  head        Employee?  @relation("DepartmentHead", fields: [headId], references: [id])
+
+  employees   Employee[] @relation("DepartmentEmployees")
+
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@map("departments")
+}
+
+model Attendance {
+  id         String           @id @default(cuid())
+  date       DateTime         @db.Date
+  clockIn    DateTime?
+  clockOut   DateTime?
+  workHours  Float?
+  status     AttendanceStatus @default(PRESENT)
+  notes      String?
+
+  employeeId String
+  employee   Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@unique([employeeId, date])
+  @@map("attendance")
+}
+
+model Leave {
+  id         String      @id @default(cuid())
+  leaveType  LeaveType
+  startDate  DateTime    @db.Date
+  endDate    DateTime    @db.Date
+  totalDays  Float
+  reason     String
+  status     LeaveStatus @default(PENDING)
+  remarks    String?
+
+  employeeId String
+  employee   Employee    @relation("EmployeeLeaves", fields: [employeeId], references: [id], onDelete: Cascade)
+
+  approverId String?
+  approver   Employee?   @relation("ApproverLeaves", fields: [approverId], references: [id])
+
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@map("leaves")
+}
+
+model LeaveBalance {
+  id            String    @id @default(cuid())
+  year          Int
+  leaveType     LeaveType
+  totalDays     Float
+  usedDays      Float     @default(0)
+  remainingDays Float
+
+  employeeId    String
+  employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([employeeId, year, leaveType])
+  @@map("leave_balances")
+}
